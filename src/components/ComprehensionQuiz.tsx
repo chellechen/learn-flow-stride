@@ -5,57 +5,21 @@ import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { CheckCircle, XCircle, Award, BookOpen } from 'lucide-react';
+import { LessonData, QuizStats } from '@/types/lesson';
 
 interface ComprehensionQuizProps {
-  onComplete: () => void;
+  lessonData: LessonData;
+  onComplete: (stats: QuizStats) => void;
 }
 
-const ComprehensionQuiz = ({ onComplete }: ComprehensionQuizProps) => {
+const ComprehensionQuiz = ({ lessonData, onComplete }: ComprehensionQuizProps) => {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState('');
   const [answers, setAnswers] = useState<string[]>([]);
   const [showResults, setShowResults] = useState(false);
   const [quizCompleted, setQuizCompleted] = useState(false);
 
-  const questions = [
-    {
-      id: 1,
-      question: "What is machine learning according to the text?",
-      options: [
-        "A type of computer programming language",
-        "A subset of artificial intelligence that enables computers to learn from data",
-        "A method for building physical robots",
-        "A way to store large amounts of data"
-      ],
-      correct: 1,
-      explanation: "Machine learning is defined as a subset of artificial intelligence that enables computers to learn and make decisions from data without being explicitly programmed for every task."
-    },
-    {
-      id: 2,
-      question: "What does machine learning involve fundamentally?",
-      options: [
-        "Writing code for every possible scenario",
-        "Training algorithms on large datasets to identify patterns",
-        "Manually inputting all possible answers",
-        "Creating physical machines"
-      ],
-      correct: 1,
-      explanation: "The fundamental concept behind machine learning involves training algorithms on large datasets to identify patterns and relationships within the data."
-    },
-    {
-      id: 3,
-      question: "How many main types of machine learning are mentioned?",
-      options: [
-        "Two",
-        "Three",
-        "Four",
-        "Five"
-      ],
-      correct: 1,
-      explanation: "The text mentions three main types of machine learning: supervised learning, unsupervised learning, and reinforcement learning."
-    }
-  ];
-
+  const questions = lessonData.questions;
   const currentQ = questions[currentQuestion];
 
   const handleAnswerSelect = (value: string) => {
@@ -88,6 +52,17 @@ const ComprehensionQuiz = ({ onComplete }: ComprehensionQuizProps) => {
     return Math.round((calculateScore() / questions.length) * 100);
   };
 
+  const handleComplete = () => {
+    const score = calculateScore();
+    const percentage = getScorePercentage();
+    const finalStats: QuizStats = {
+      score,
+      totalQuestions: questions.length,
+      percentage
+    };
+    onComplete(finalStats);
+  };
+
   if (quizCompleted) {
     const score = calculateScore();
     const percentage = getScorePercentage();
@@ -97,7 +72,7 @@ const ComprehensionQuiz = ({ onComplete }: ComprehensionQuizProps) => {
         <CardHeader className="text-center">
           <Award className="h-16 w-16 mx-auto mb-4 text-yellow-500" />
           <CardTitle className="text-2xl">Quiz Completed!</CardTitle>
-          <CardDescription>Here are your results</CardDescription>
+          <CardDescription>Here are your results for "{lessonData.title}"</CardDescription>
         </CardHeader>
         
         <CardContent className="space-y-6">
@@ -152,7 +127,28 @@ const ComprehensionQuiz = ({ onComplete }: ComprehensionQuizProps) => {
           </div>
 
           <Button 
-            onClick={onComplete}
+            onClick={handleComplete}
+            className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+          >
+            Return to Dashboard
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!currentQ) {
+    return (
+      <Card className="max-w-2xl mx-auto">
+        <CardHeader className="text-center">
+          <CardTitle>No Quiz Questions Available</CardTitle>
+          <CardDescription>
+            This lesson doesn't have quiz questions. Let's return to the dashboard.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button 
+            onClick={() => onComplete({ score: 0, totalQuestions: 0, percentage: 0 })}
             className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
           >
             Return to Dashboard
@@ -168,7 +164,7 @@ const ComprehensionQuiz = ({ onComplete }: ComprehensionQuizProps) => {
         <div className="flex items-center space-x-2">
           <BookOpen className="h-6 w-6 text-blue-600" />
           <div>
-            <CardTitle>Comprehension Quiz</CardTitle>
+            <CardTitle>Comprehension Quiz - {lessonData.title}</CardTitle>
             <CardDescription>
               Question {currentQuestion + 1} of {questions.length}
             </CardDescription>

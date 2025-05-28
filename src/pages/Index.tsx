@@ -9,22 +9,20 @@ import TypingExercise from '@/components/TypingExercise';
 import RecallPhase from '@/components/RecallPhase';
 import ComprehensionQuiz from '@/components/ComprehensionQuiz';
 import FileUpload from '@/components/FileUpload';
+import { useLessonData } from '@/hooks/useLessonData';
+import { TypingStats, RecallStats, QuizStats } from '@/types/lesson';
 
 const Index = () => {
   const [currentView, setCurrentView] = useState('dashboard');
+  const { lessonData, isProcessing, processFile, updateProgress, resetLesson } = useLessonData();
+  const [uploadProgress, setUploadProgress] = useState(0);
+  
   const [userStats, setUserStats] = useState({
     points: 1247,
     streak: 7,
     wpm: 45,
     accuracy: 92,
     lessonsCompleted: 12
-  });
-
-  const [currentLesson, setCurrentLesson] = useState({
-    title: "Introduction to Machine Learning",
-    currentPage: 3,
-    totalPages: 15,
-    progress: 20
   });
 
   const badges = [
@@ -34,16 +32,96 @@ const Index = () => {
     { name: "Quiz Expert", description: "100% quiz score", earned: false }
   ];
 
+  const handleFileUpload = async (file: File) => {
+    console.log('File uploaded:', file.name);
+    
+    // Simulate upload progress
+    setUploadProgress(0);
+    const progressInterval = setInterval(() => {
+      setUploadProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(progressInterval);
+          return 100;
+        }
+        return prev + Math.random() * 15;
+      });
+    }, 200);
+
+    await processFile(file);
+    
+    setTimeout(() => {
+      setCurrentView('typing');
+    }, 1000);
+  };
+
+  const handleTypingComplete = (stats: TypingStats) => {
+    console.log('Typing completed with stats:', stats);
+    updateProgress({ typingCompleted: true });
+    setUserStats(prev => ({
+      ...prev,
+      wpm: Math.max(prev.wpm, stats.wpm),
+      accuracy: Math.round((prev.accuracy + stats.accuracy) / 2)
+    }));
+    setCurrentView('recall');
+  };
+
+  const handleRecallComplete = (stats: RecallStats) => {
+    console.log('Recall completed with stats:', stats);
+    updateProgress({ recallCompleted: true });
+    setCurrentView('quiz');
+  };
+
+  const handleQuizComplete = (stats: QuizStats) => {
+    console.log('Quiz completed with stats:', stats);
+    updateProgress({ quizCompleted: true });
+    setUserStats(prev => ({
+      ...prev,
+      points: prev.points + stats.percentage,
+      lessonsCompleted: prev.lessonsCompleted + 1
+    }));
+    setCurrentView('dashboard');
+  };
+
   const renderCurrentView = () => {
     switch (currentView) {
       case 'upload':
-        return <FileUpload onUploadComplete={() => setCurrentView('typing')} />;
+        return (
+          <FileUpload 
+            onUploadComplete={handleFileUpload}
+            isProcessing={isProcessing}
+            uploadProgress={uploadProgress}
+          />
+        );
       case 'typing':
-        return <TypingExercise onComplete={() => setCurrentView('recall')} />;
+        if (!lessonData) {
+          return <div className="text-center">No lesson data available. Please upload a file first.</div>;
+        }
+        return (
+          <TypingExercise 
+            lessonData={lessonData}
+            onComplete={handleTypingComplete}
+          />
+        );
       case 'recall':
-        return <RecallPhase onComplete={() => setCurrentView('quiz')} />;
+        if (!lessonData) {
+          return <div className="text-center">No lesson data available. Please upload a file first.</div>;
+        }
+        return (
+          <RecallPhase 
+            lessonData={lessonData}
+            onComplete={handleRecallComplete}
+          />
+        );
       case 'quiz':
-        return <ComprehensionQuiz onComplete={() => setCurrentView('dashboard')} />;
+        if (!lessonData) {
+          return <div className="text-center">No lesson data available. Please upload a file first.</div>;
+        }
+        return (
+          <ComprehensionQuiz 
+            lessonData={lessonData}
+            onComplete={handleQuizComplete}
+          />
+        );
       default:
         return (
           <div className="space-y-6">
@@ -99,27 +177,28 @@ const Index = () => {
             </div>
 
             {/* Current Lesson Progress */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Current Lesson</CardTitle>
-                <CardDescription>{currentLesson.title}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between text-sm text-gray-600">
-                    <span>Page {currentLesson.currentPage} of {currentLesson.totalPages}</span>
-                    <span>{currentLesson.progress}% Complete</span>
+            {lessonData && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Current Lesson</CardTitle>
+                  <CardDescription>{lessonData.title}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex justify-between text-sm text-gray-600">
+                      <span>Chunks: {lessonData.chunks.length}</span>
+                      <span>Questions: {lessonData.questions.length}</span>
+                    </div>
+                    <Button 
+                      onClick={() => setCurrentView('typing')} 
+                      className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+                    >
+                      Continue Lesson
+                    </Button>
                   </div>
-                  <Progress value={currentLesson.progress} className="w-full" />
-                  <Button 
-                    onClick={() => setCurrentView('typing')} 
-                    className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-                  >
-                    Continue Lesson
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Badges */}
             <Card>
@@ -157,15 +236,20 @@ const Index = () => {
                 <CardContent className="p-6 text-center">
                   <Upload className="h-12 w-12 mx-auto mb-4 text-blue-500" />
                   <h3 className="text-lg font-semibold mb-2">Upload New Lesson</h3>
-                  <p className="text-gray-600">Upload PDF or DOCX files to create new typing exercises</p>
+                  <p className="text-gray-600">Upload PDF, DOCX, or TXT files to create new typing exercises</p>
                 </CardContent>
               </Card>
               
-              <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setCurrentView('typing')}>
+              <Card 
+                className={`cursor-pointer hover:shadow-lg transition-shadow ${!lessonData ? 'opacity-50 cursor-not-allowed' : ''}`}
+                onClick={() => lessonData && setCurrentView('typing')}
+              >
                 <CardContent className="p-6 text-center">
                   <BookOpen className="h-12 w-12 mx-auto mb-4 text-green-500" />
                   <h3 className="text-lg font-semibold mb-2">Practice Typing</h3>
-                  <p className="text-gray-600">Continue with your current lesson or start a new exercise</p>
+                  <p className="text-gray-600">
+                    {lessonData ? 'Continue with your current lesson' : 'Upload a file to start practicing'}
+                  </p>
                 </CardContent>
               </Card>
             </div>
@@ -202,6 +286,18 @@ const Index = () => {
               >
                 Upload
               </Button>
+              {lessonData && (
+                <Button 
+                  variant="ghost"
+                  onClick={() => {
+                    resetLesson();
+                    setCurrentView('dashboard');
+                  }}
+                  className="text-red-600 hover:text-red-700"
+                >
+                  Reset Lesson
+                </Button>
+              )}
             </nav>
           </div>
         </div>

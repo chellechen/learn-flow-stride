@@ -1,4 +1,3 @@
-
 import { useState, useRef } from 'react';
 import { Upload, FileText, CheckCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,10 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 
 interface FileUploadProps {
-  onUploadComplete: () => void;
+  onUploadComplete: (file: File) => void;
+  isProcessing: boolean;
+  uploadProgress: number;
 }
 
-const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
+const FileUpload = ({ onUploadComplete, isProcessing, uploadProgress }: FileUploadProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -43,15 +44,15 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
   };
 
   const handleFile = (file: File) => {
-    const validTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    const validTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
     
     if (!validTypes.includes(file.type)) {
-      alert('Please upload a PDF or DOCX file');
+      alert('Please upload a PDF, DOCX, or TXT file');
       return;
     }
 
     setUploadedFile(file);
-    simulateUpload();
+    onUploadComplete(file);
   };
 
   const simulateUpload = () => {
@@ -120,7 +121,7 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
       <CardHeader className="text-center">
         <CardTitle>Upload Your Learning Material</CardTitle>
         <CardDescription>
-          Upload PDF or DOCX files to create interactive typing exercises
+          Upload PDF, DOCX, or TXT files to create interactive typing exercises
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -143,7 +144,7 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.docx"
+            accept=".pdf,.docx,.txt"
             onChange={handleFileSelect}
             className="hidden"
           />
@@ -156,7 +157,7 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
           </Button>
           
           <p className="text-sm text-gray-500 mt-4">
-            Supported formats: PDF, DOCX (Max size: 10MB)
+            Supported formats: PDF, DOCX, TXT (Max size: 10MB)
           </p>
         </div>
 

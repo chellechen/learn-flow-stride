@@ -4,41 +4,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CheckCircle, XCircle, Brain } from 'lucide-react';
+import { LessonData, RecallStats } from '@/types/lesson';
 
 interface RecallPhaseProps {
-  onComplete: () => void;
+  lessonData: LessonData;
+  onComplete: (stats: RecallStats) => void;
 }
 
-const RecallPhase = ({ onComplete }: RecallPhaseProps) => {
+const RecallPhase = ({ lessonData, onComplete }: RecallPhaseProps) => {
   const [currentChunk, setCurrentChunk] = useState(0);
   const [answers, setAnswers] = useState<{ [key: number]: string }>({});
   const [showResults, setShowResults] = useState(false);
-  const [score, setScore] = useState(0);
+  const [totalScore, setTotalScore] = useState(0);
 
-  const recallChunks = [
-    {
-      text: "Machine learning is a subset of _______ _______ that enables computers to learn and make decisions from data without being explicitly programmed for every task.",
-      blanks: [{ index: 0, answer: "artificial intelligence", position: 30 }],
-      original: "Machine learning is a subset of artificial intelligence that enables computers to learn and make decisions from data without being explicitly programmed for every task."
-    },
-    {
-      text: "The fundamental concept behind machine learning involves _______ algorithms on large datasets to identify _______ and relationships within the data.",
-      blanks: [
-        { index: 0, answer: "training", position: 60 },
-        { index: 1, answer: "patterns", position: 110 }
-      ],
-      original: "The fundamental concept behind machine learning involves training algorithms on large datasets to identify patterns and relationships within the data."
-    },
-    {
-      text: "There are _______ main types of machine learning: supervised learning, _______ learning, and reinforcement learning.",
-      blanks: [
-        { index: 0, answer: "three", position: 10 },
-        { index: 1, answer: "unsupervised", position: 75 }
-      ],
-      original: "There are three main types of machine learning: supervised learning, unsupervised learning, and reinforcement learning."
-    }
-  ];
-
+  // Filter chunks that have blanks
+  const recallChunks = lessonData.chunks.filter(chunk => chunk.blanks && chunk.blanks.length > 0);
   const currentRecall = recallChunks[currentChunk];
 
   const handleAnswerChange = (blankIndex: number, value: string) => {
@@ -50,15 +30,17 @@ const RecallPhase = ({ onComplete }: RecallPhaseProps) => {
 
   const checkAnswers = () => {
     let correctCount = 0;
-    currentRecall.blanks.forEach(blank => {
-      const userAnswer = answers[blank.index]?.toLowerCase().trim();
-      const correctAnswer = blank.answer.toLowerCase();
-      if (userAnswer === correctAnswer) {
-        correctCount++;
-      }
-    });
+    if (currentRecall?.blanks) {
+      currentRecall.blanks.forEach(blank => {
+        const userAnswer = answers[blank.index]?.toLowerCase().trim();
+        const correctAnswer = blank.answer.toLowerCase();
+        if (userAnswer === correctAnswer) {
+          correctCount++;
+        }
+      });
+    }
     
-    setScore(prev => prev + correctCount);
+    setTotalScore(prev => prev + correctCount);
     setShowResults(true);
   };
 
@@ -68,12 +50,21 @@ const RecallPhase = ({ onComplete }: RecallPhaseProps) => {
       setAnswers({});
       setShowResults(false);
     } else {
-      onComplete();
+      const totalBlanks = recallChunks.reduce((total, chunk) => 
+        total + (chunk.blanks?.length || 0), 0
+      );
+      const finalStats: RecallStats = {
+        score: totalScore,
+        totalBlanks
+      };
+      onComplete(finalStats);
     }
   };
 
   const renderTextWithBlanks = () => {
-    const parts = currentRecall.text.split('_______');
+    if (!currentRecall?.blankedText) return null;
+    
+    const parts = currentRecall.blankedText.split('_______');
     return (
       <div className="text-lg leading-relaxed">
         {parts.map((part, index) => (
@@ -95,11 +86,34 @@ const RecallPhase = ({ onComplete }: RecallPhaseProps) => {
   };
 
   const getBlankResult = (blankIndex: number) => {
-    const blank = currentRecall.blanks[blankIndex];
+    const blank = currentRecall?.blanks?.[blankIndex];
+    if (!blank) return false;
+    
     const userAnswer = answers[blankIndex]?.toLowerCase().trim();
     const correctAnswer = blank.answer.toLowerCase();
     return userAnswer === correctAnswer;
   };
+
+  if (!currentRecall) {
+    return (
+      <Card className="max-w-2xl mx-auto">
+        <CardHeader className="text-center">
+          <CardTitle>No Recall Content Available</CardTitle>
+          <CardDescription>
+            This lesson doesn't have recall exercises. Let's continue to the quiz.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button 
+            onClick={() => onComplete({ score: 0, totalBlanks: 0 })}
+            className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+          >
+            Continue to Quiz
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="max-w-4xl mx-auto">
@@ -107,7 +121,7 @@ const RecallPhase = ({ onComplete }: RecallPhaseProps) => {
         <div className="flex items-center space-x-2">
           <Brain className="h-6 w-6 text-purple-600" />
           <div>
-            <CardTitle>Recall Phase</CardTitle>
+            <CardTitle>Recall Phase - {lessonData.title}</CardTitle>
             <CardDescription>
               Fill in the blanks - Chunk {currentChunk + 1} of {recallChunks.length}
             </CardDescription>
@@ -125,7 +139,7 @@ const RecallPhase = ({ onComplete }: RecallPhaseProps) => {
           <div className="p-6 bg-gray-50 rounded-lg">
             <h3 className="font-semibold mb-4">Results:</h3>
             <div className="space-y-3">
-              {currentRecall.blanks.map((blank, index) => (
+              {currentRecall.blanks?.map((blank, index) => (
                 <div key={index} className="flex items-center space-x-3">
                   {getBlankResult(index) ? (
                     <CheckCircle className="h-5 w-5 text-green-500" />
@@ -146,7 +160,7 @@ const RecallPhase = ({ onComplete }: RecallPhaseProps) => {
             
             <div className="mt-4 p-4 bg-white rounded border">
               <h4 className="font-semibold mb-2">Complete Text:</h4>
-              <p className="text-gray-700">{currentRecall.original}</p>
+              <p className="text-gray-700">{currentRecall.text}</p>
             </div>
           </div>
         )}
@@ -170,7 +184,7 @@ const RecallPhase = ({ onComplete }: RecallPhaseProps) => {
           )}
           
           <div className="text-sm text-gray-600 flex items-center">
-            Score: {score} / {recallChunks.reduce((total, chunk) => total + chunk.blanks.length, 0)} correct
+            Score: {totalScore} / {recallChunks.reduce((total, chunk) => total + (chunk.blanks?.length || 0), 0)} correct
           </div>
         </div>
       </CardContent>

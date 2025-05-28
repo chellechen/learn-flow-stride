@@ -4,27 +4,25 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Clock, Target, TrendingUp } from 'lucide-react';
+import { LessonData, TypingStats } from '@/types/lesson';
 
 interface TypingExerciseProps {
-  onComplete: () => void;
+  lessonData: LessonData;
+  onComplete: (stats: TypingStats) => void;
 }
 
-const TypingExercise = ({ onComplete }: TypingExerciseProps) => {
-  const [currentChunk, setCurrentChunk] = useState(0);
+const TypingExercise = ({ lessonData, onComplete }: TypingExerciseProps) => {
+  const [currentChunk, setCurrentChunk] = useState(lessonData.progress.currentChunk);
   const [typedText, setTypedText] = useState('');
   const [startTime, setStartTime] = useState<number | null>(null);
   const [wpm, setWpm] = useState(0);
   const [accuracy, setAccuracy] = useState(100);
   const [isCompleted, setIsCompleted] = useState(false);
+  const [totalTimeSpent, setTotalTimeSpent] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const chunks = [
-    "Machine learning is a subset of artificial intelligence that enables computers to learn and make decisions from data without being explicitly programmed for every task.",
-    "The fundamental concept behind machine learning involves training algorithms on large datasets to identify patterns and relationships within the data.",
-    "There are three main types of machine learning: supervised learning, unsupervised learning, and reinforcement learning, each serving different purposes and applications."
-  ];
-
-  const currentText = chunks[currentChunk];
+  const chunks = lessonData.chunks;
+  const currentText = chunks[currentChunk]?.text || '';
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -65,6 +63,10 @@ const TypingExercise = ({ onComplete }: TypingExerciseProps) => {
 
     // Check if chunk is completed
     if (value === currentText) {
+      const chunkEndTime = Date.now();
+      const chunkTimeSpent = startTime ? (chunkEndTime - startTime) / 1000 : 0;
+      setTotalTimeSpent(prev => prev + chunkTimeSpent);
+      
       setTimeout(() => {
         if (currentChunk < chunks.length - 1) {
           setCurrentChunk(prev => prev + 1);
@@ -83,6 +85,15 @@ const TypingExercise = ({ onComplete }: TypingExerciseProps) => {
   };
 
   const progress = ((currentChunk + (typedText.length / currentText.length)) / chunks.length) * 100;
+
+  const handleComplete = () => {
+    const finalStats: TypingStats = {
+      wpm,
+      accuracy,
+      timeSpent: totalTimeSpent
+    };
+    onComplete(finalStats);
+  };
 
   if (isCompleted) {
     return (
@@ -105,13 +116,13 @@ const TypingExercise = ({ onComplete }: TypingExerciseProps) => {
             </div>
             <div className="p-4 bg-purple-50 rounded-lg">
               <Clock className="h-8 w-8 mx-auto mb-2 text-purple-600" />
-              <p className="text-2xl font-bold text-purple-600">+50</p>
-              <p className="text-sm text-gray-600">Points</p>
+              <p className="text-2xl font-bold text-purple-600">{Math.round(totalTimeSpent)}s</p>
+              <p className="text-sm text-gray-600">Time</p>
             </div>
           </div>
           
           <Button 
-            onClick={onComplete}
+            onClick={handleComplete}
             className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
           >
             Continue to Recall Phase
@@ -126,7 +137,7 @@ const TypingExercise = ({ onComplete }: TypingExerciseProps) => {
       <CardHeader>
         <div className="flex justify-between items-center">
           <div>
-            <CardTitle>Typing Exercise</CardTitle>
+            <CardTitle>Typing Exercise - {lessonData.title}</CardTitle>
             <CardDescription>
               Chunk {currentChunk + 1} of {chunks.length} - Type the text below
             </CardDescription>
