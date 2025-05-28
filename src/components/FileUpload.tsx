@@ -1,3 +1,4 @@
+
 import { useState, useRef } from 'react';
 import { Upload, FileText, CheckCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,8 +13,6 @@ interface FileUploadProps {
 
 const FileUpload = ({ onUploadComplete, isProcessing, uploadProgress }: FileUploadProps) => {
   const [isDragging, setIsDragging] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -53,25 +52,6 @@ const FileUpload = ({ onUploadComplete, isProcessing, uploadProgress }: FileUplo
 
     setUploadedFile(file);
     onUploadComplete(file);
-  };
-
-  const simulateUpload = () => {
-    setIsProcessing(true);
-    setUploadProgress(0);
-    
-    const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setTimeout(() => {
-            setIsProcessing(false);
-            onUploadComplete();
-          }, 1000);
-          return 100;
-        }
-        return prev + Math.random() * 15;
-      });
-    }, 200);
   };
 
   if (isProcessing) {
