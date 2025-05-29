@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Upload, BookOpen, Target, Trophy, TrendingUp, Settings as SettingsIcon, User, LogOut } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,9 +26,9 @@ const Index = () => {
   
   const [lessons, setLessons] = useState<LessonData[]>([]);
 
-  const handleFileUpload = async (uploadedLessonData: LessonData) => {
-    console.log('Lesson data received:', uploadedLessonData.title);
-    setLessons(prev => [...prev, uploadedLessonData]);
+  const handleFileUpload = async (file: File) => {
+    console.log('File uploaded:', file.name);
+    await processFile(file);
     setCurrentView('typing');
   };
 
