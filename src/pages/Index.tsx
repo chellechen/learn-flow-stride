@@ -23,7 +23,7 @@ const Index = () => {
   const [currentView, setCurrentView] = useState('dashboard');
   const { lessonData, isProcessing, processFile, updateProgress, resetLesson } = useLessonData();
   const { user, userStats, userPreferences, isLoading, signOut, updateStats, updatePreferences } = useAuth();
-  const { badges, addPoints, updateStreak, checkBadgeEarned, showNotification, hideNotification } = useGameification();
+  const { userStats: gamificationStats, badges, recentAchievements, updateTypingStats, updateRecallStats, updateQuizStats, completeLession, awardPoints } = useGameification();
   
   const [lessons, setLessons] = useState<LessonData[]>([]);
 
@@ -73,8 +73,8 @@ const Index = () => {
       totalStudyTime: userStats.totalStudyTime + stats.timeSpent
     });
 
-    // Award points for typing completion
-    addPoints(10, 'typing_completed');
+    // Update gamification stats
+    updateTypingStats(stats);
     
     setCurrentView('recall');
   };
@@ -83,17 +83,13 @@ const Index = () => {
     console.log('Recall completed with stats:', stats);
     updateProgress({ recallCompleted: true });
     
-    // Update user stats and award points
+    // Update user stats
     updateStats({
       recallAccuracy: Math.round((userStats.recallAccuracy + stats.accuracy) / 2)
     });
     
-    addPoints(stats.score, 'recall_correct');
-    
-    // Check for Perfect Recall badge
-    if (stats.accuracy === 100) {
-      checkBadgeEarned('perfect_recall');
-    }
+    // Update gamification stats
+    updateRecallStats(stats);
     
     setCurrentView('quiz');
   };
@@ -109,16 +105,11 @@ const Index = () => {
       quizSuccessRate: Math.round((userStats.quizSuccessRate + stats.percentage) / 2)
     });
 
-    // Award points for quiz completion
-    addPoints(stats.score, 'quiz_correct');
+    // Update gamification stats
+    updateQuizStats(stats);
     
-    // Update streak
-    updateStreak();
-    
-    // Check for badges
-    if (stats.percentage >= 90) {
-      checkBadgeEarned('lesson_mastery');
-    }
+    // Complete lesson
+    completeLession(userStats.recallAccuracy, stats.percentage);
     
     setCurrentView('dashboard');
   };
@@ -300,14 +291,15 @@ const Index = () => {
         </div>
 
         {/* Achievement Notifications */}
-        {showNotification && (
+        {recentAchievements.map((badge) => (
           <AchievementNotification
-            title={showNotification.title}
-            description={showNotification.description}
-            points={showNotification.points}
-            onClose={hideNotification}
+            key={badge.id}
+            badge={badge}
+            onDismiss={() => {
+              // The badge will be automatically removed from recentAchievements after 5 seconds
+            }}
           />
-        )}
+        ))}
       </div>
     </div>
   );
