@@ -15,24 +15,28 @@ const processFileContent = async (file: File): Promise<{ chunks: LessonChunk[], 
   const chunks: LessonChunk[] = [];
   
   for (let i = 0; i < sentences.length; i++) {
+    const text = sentences[i].trim();
+    const wordCount = text.split(/\s+/).length;
+    
     const chunk: LessonChunk = {
       id: `chunk-${i}`,
-      text: sentences[i].trim(),
+      text: text,
+      wordCount: wordCount
     };
     
     // Create blanked version for recall (simulate AI blanking)
-    if (sentences[i].includes('machine learning')) {
-      chunk.blankedText = sentences[i].replace(/machine learning/gi, '_______');
-      chunk.blanks = [{ index: 0, answer: 'machine learning', position: sentences[i].toLowerCase().indexOf('machine learning') }];
-    } else if (sentences[i].includes('artificial intelligence')) {
-      chunk.blankedText = sentences[i].replace(/artificial intelligence/gi, '_______');
-      chunk.blanks = [{ index: 0, answer: 'artificial intelligence', position: sentences[i].toLowerCase().indexOf('artificial intelligence') }];
-    } else if (sentences[i].includes('algorithms')) {
-      chunk.blankedText = sentences[i].replace(/algorithms/gi, '_______');
-      chunk.blanks = [{ index: 0, answer: 'algorithms', position: sentences[i].toLowerCase().indexOf('algorithms') }];
+    if (text.includes('machine learning')) {
+      chunk.blankedText = text.replace(/machine learning/gi, '_______');
+      chunk.blanks = [{ index: 0, answer: 'machine learning', position: text.toLowerCase().indexOf('machine learning') }];
+    } else if (text.includes('artificial intelligence')) {
+      chunk.blankedText = text.replace(/artificial intelligence/gi, '_______');
+      chunk.blanks = [{ index: 0, answer: 'artificial intelligence', position: text.toLowerCase().indexOf('artificial intelligence') }];
+    } else if (text.includes('algorithms')) {
+      chunk.blankedText = text.replace(/algorithms/gi, '_______');
+      chunk.blanks = [{ index: 0, answer: 'algorithms', position: text.toLowerCase().indexOf('algorithms') }];
     } else {
       // Create simple blanks for other sentences
-      const words = sentences[i].split(' ');
+      const words = text.split(' ');
       const importantWordIndex = Math.floor(words.length / 2);
       const importantWord = words[importantWordIndex];
       words[importantWordIndex] = '_______';
@@ -97,14 +101,25 @@ export const useLessonData = () => {
       
       const newLesson: LessonData = {
         id: `lesson-${Date.now()}`,
-        title: file.name.replace(/\.[^/.]+$/, ""), // Remove file extension
-        chunks,
-        questions,
+        title: file.name.replace(/\.[^/.]+$/, ""),
+        totalPages: 1,
+        currentPage: 0,
+        pages: [{
+          id: 'page-0',
+          pageNumber: 1,
+          chunks,
+          questions,
+          completed: false
+        }],
         progress: {
           currentChunk: 0,
+          currentPage: 0,
           typingCompleted: false,
           recallCompleted: false,
           quizCompleted: false,
+          totalPoints: 0,
+          streakDays: 0,
+          lastStudyDate: new Date().toISOString()
         }
       };
       

@@ -3,19 +3,19 @@ import { useState } from 'react';
 import { Upload, BookOpen, Target, Trophy, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import TypingExercise from '@/components/TypingExercise';
 import RecallPhase from '@/components/RecallPhase';
 import ComprehensionQuiz from '@/components/ComprehensionQuiz';
 import FileUpload from '@/components/FileUpload';
 import { useLessonData } from '@/hooks/useLessonData';
-import { TypingStats, RecallStats, QuizStats } from '@/types/lesson';
+import { useLessonProcessor } from '@/hooks/useLessonProcessor';
+import { TypingStats, RecallStats, QuizStats, LessonData } from '@/types/lesson';
 
 const Index = () => {
   const [currentView, setCurrentView] = useState('dashboard');
   const { lessonData, isProcessing, processFile, updateProgress, resetLesson } = useLessonData();
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const { processFileToLesson } = useLessonProcessor();
   
   const [userStats, setUserStats] = useState({
     points: 1247,
@@ -32,26 +32,9 @@ const Index = () => {
     { name: "Quiz Expert", description: "100% quiz score", earned: false }
   ];
 
-  const handleFileUpload = async (file: File) => {
-    console.log('File uploaded:', file.name);
-    
-    // Simulate upload progress
-    setUploadProgress(0);
-    const progressInterval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(progressInterval);
-          return 100;
-        }
-        return prev + Math.random() * 15;
-      });
-    }, 200);
-
-    await processFile(file);
-    
-    setTimeout(() => {
-      setCurrentView('typing');
-    }, 1000);
+  const handleFileUpload = async (lessonData: LessonData) => {
+    console.log('Lesson data received:', lessonData.title);
+    setCurrentView('typing');
   };
 
   const handleTypingComplete = (stats: TypingStats) => {
@@ -88,8 +71,6 @@ const Index = () => {
         return (
           <FileUpload 
             onUploadComplete={handleFileUpload}
-            isProcessing={isProcessing}
-            uploadProgress={uploadProgress}
           />
         );
       case 'typing':
@@ -186,8 +167,8 @@ const Index = () => {
                 <CardContent>
                   <div className="space-y-4">
                     <div className="flex justify-between text-sm text-gray-600">
-                      <span>Chunks: {lessonData.chunks.length}</span>
-                      <span>Questions: {lessonData.questions.length}</span>
+                      <span>Chunks: {lessonData.pages[0]?.chunks.length || 0}</span>
+                      <span>Questions: {lessonData.pages[0]?.questions.length || 0}</span>
                     </div>
                     <Button 
                       onClick={() => setCurrentView('typing')} 

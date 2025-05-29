@@ -18,8 +18,10 @@ const ComprehensionQuiz = ({ lessonData, onComplete }: ComprehensionQuizProps) =
   const [answers, setAnswers] = useState<string[]>([]);
   const [showResults, setShowResults] = useState(false);
   const [quizCompleted, setQuizCompleted] = useState(false);
+  const [startTime] = useState(Date.now());
 
-  const questions = lessonData.questions;
+  const currentPage = lessonData.pages[lessonData.currentPage];
+  const questions = currentPage?.questions || [];
   const currentQ = questions[currentQuestion];
 
   const handleAnswerSelect = (value: string) => {
@@ -55,10 +57,12 @@ const ComprehensionQuiz = ({ lessonData, onComplete }: ComprehensionQuizProps) =
   const handleComplete = () => {
     const score = calculateScore();
     const percentage = getScorePercentage();
+    const timeSpent = (Date.now() - startTime) / 1000;
     const finalStats: QuizStats = {
       score,
       totalQuestions: questions.length,
-      percentage
+      percentage,
+      timeSpent
     };
     onComplete(finalStats);
   };
@@ -148,7 +152,7 @@ const ComprehensionQuiz = ({ lessonData, onComplete }: ComprehensionQuizProps) =
         </CardHeader>
         <CardContent>
           <Button 
-            onClick={() => onComplete({ score: 0, totalQuestions: 0, percentage: 0 })}
+            onClick={() => onComplete({ score: 0, totalQuestions: 0, percentage: 0, timeSpent: 0 })}
             className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
           >
             Return to Dashboard
