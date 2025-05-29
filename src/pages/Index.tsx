@@ -1,69 +1,163 @@
 
 import { useState } from 'react';
-import { Upload, BookOpen, Target, Trophy, TrendingUp } from 'lucide-react';
+import { Upload, BookOpen, Target, Trophy, TrendingUp, Settings as SettingsIcon, User, LogOut } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import TypingExercise from '@/components/TypingExercise';
 import RecallPhase from '@/components/RecallPhase';
 import ComprehensionQuiz from '@/components/ComprehensionQuiz';
 import FileUpload from '@/components/FileUpload';
+import Dashboard from '@/components/Dashboard';
+import Settings from '@/components/Settings';
+import LessonManager from '@/components/LessonManager';
+import { AchievementNotification } from '@/components/ui/achievement-notification';
 import { useLessonData } from '@/hooks/useLessonData';
-import { useLessonProcessor } from '@/hooks/useLessonProcessor';
+import { useGameification } from '@/hooks/useGameification';
+import { useAuth } from '@/hooks/useAuth';
 import { TypingStats, RecallStats, QuizStats, LessonData } from '@/types/lesson';
 
 const Index = () => {
   const [currentView, setCurrentView] = useState('dashboard');
   const { lessonData, isProcessing, processFile, updateProgress, resetLesson } = useLessonData();
-  const { processFileToLesson } = useLessonProcessor();
+  const { user, userStats, userPreferences, isLoading, signOut, updateStats, updatePreferences } = useAuth();
+  const { badges, addPoints, updateStreak, checkBadgeEarned, showNotification, hideNotification } = useGameification();
   
-  const [userStats, setUserStats] = useState({
-    points: 1247,
-    streak: 7,
-    wpm: 45,
-    accuracy: 92,
-    lessonsCompleted: 12
-  });
+  const [lessons, setLessons] = useState<LessonData[]>([]);
 
-  const badges = [
-    { name: "Speed Demon", description: "Type 50+ WPM", earned: true },
-    { name: "Accuracy Master", description: "95%+ accuracy", earned: false },
-    { name: "Streak Champion", description: "7 day streak", earned: true },
-    { name: "Quiz Expert", description: "100% quiz score", earned: false }
-  ];
-
-  const handleFileUpload = async (lessonData: LessonData) => {
-    console.log('Lesson data received:', lessonData.title);
+  const handleFileUpload = async (uploadedLessonData: LessonData) => {
+    console.log('Lesson data received:', uploadedLessonData.title);
+    setLessons(prev => [...prev, uploadedLessonData]);
     setCurrentView('typing');
+  };
+
+  const handleLessonSelect = (lesson: LessonData) => {
+    // Set the selected lesson and navigate to appropriate view
+    const status = getCompletionStatus(lesson);
+    if (status === 'Completed') {
+      setCurrentView('dashboard');
+    } else if (lesson.progress.typingCompleted && !lesson.progress.recallCompleted) {
+      setCurrentView('recall');
+    } else if (lesson.progress.recallCompleted && !lesson.progress.quizCompleted) {
+      setCurrentView('quiz');
+    } else {
+      setCurrentView('typing');
+    }
+  };
+
+  const handleLessonDelete = (lessonId: string) => {
+    setLessons(prev => prev.filter(lesson => lesson.id !== lessonId));
+    if (lessonData?.id === lessonId) {
+      resetLesson();
+      setCurrentView('dashboard');
+    }
+  };
+
+  const getCompletionStatus = (lesson: LessonData) => {
+    if (lesson.progress.quizCompleted) return 'Completed';
+    if (lesson.progress.recallCompleted) return 'Quiz Pending';
+    if (lesson.progress.typingCompleted) return 'Recall Pending';
+    return 'In Progress';
   };
 
   const handleTypingComplete = (stats: TypingStats) => {
     console.log('Typing completed with stats:', stats);
     updateProgress({ typingCompleted: true });
-    setUserStats(prev => ({
-      ...prev,
-      wpm: Math.max(prev.wpm, stats.wpm),
-      accuracy: Math.round((prev.accuracy + stats.accuracy) / 2)
-    }));
+    
+    // Update user stats
+    updateStats({
+      wpm: Math.max(userStats.wpm, stats.wpm),
+      accuracy: Math.round((userStats.accuracy + stats.accuracy) / 2),
+      totalStudyTime: userStats.totalStudyTime + stats.timeSpent
+    });
+
+    // Award points for typing completion
+    addPoints(10, 'typing_completed');
+    
     setCurrentView('recall');
   };
 
   const handleRecallComplete = (stats: RecallStats) => {
     console.log('Recall completed with stats:', stats);
     updateProgress({ recallCompleted: true });
+    
+    // Update user stats and award points
+    updateStats({
+      recallAccuracy: Math.round((userStats.recallAccuracy + stats.accuracy) / 2)
+    });
+    
+    addPoints(stats.score, 'recall_correct');
+    
+    // Check for Perfect Recall badge
+    if (stats.accuracy === 100) {
+      checkBadgeEarned('perfect_recall');
+    }
+    
     setCurrentView('quiz');
   };
 
   const handleQuizComplete = (stats: QuizStats) => {
     console.log('Quiz completed with stats:', stats);
     updateProgress({ quizCompleted: true });
-    setUserStats(prev => ({
-      ...prev,
-      points: prev.points + stats.percentage,
-      lessonsCompleted: prev.lessonsCompleted + 1
-    }));
+    
+    // Update user stats
+    updateStats({
+      points: userStats.points + stats.percentage,
+      lessonsCompleted: userStats.lessonsCompleted + 1,
+      quizSuccessRate: Math.round((userStats.quizSuccessRate + stats.percentage) / 2)
+    });
+
+    // Award points for quiz completion
+    addPoints(stats.score, 'quiz_correct');
+    
+    // Update streak
+    updateStreak();
+    
+    // Check for badges
+    if (stats.percentage >= 90) {
+      checkBadgeEarned('lesson_mastery');
+    }
+    
     setCurrentView('dashboard');
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center animate-pulse">
+            <BookOpen className="h-8 w-8 text-white" />
+          </div>
+          <p className="text-lg font-semibold">Loading Memty...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center">
+        <Card className="max-w-md mx-auto">
+          <CardHeader className="text-center">
+            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+              <BookOpen className="h-8 w-8 text-white" />
+            </div>
+            <CardTitle className="text-2xl">Welcome to Memty</CardTitle>
+            <CardDescription>
+              Type to learn, master your lessons with gamified studying
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button className="w-full" size="lg">
+              Continue as Demo User
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const renderCurrentView = () => {
     switch (currentView) {
@@ -71,6 +165,7 @@ const Index = () => {
         return (
           <FileUpload 
             onUploadComplete={handleFileUpload}
+            chunkSize={userPreferences.chunkSize}
           />
         );
       case 'typing':
@@ -103,190 +198,116 @@ const Index = () => {
             onComplete={handleQuizComplete}
           />
         );
+      case 'lessons':
+        return (
+          <LessonManager 
+            lessons={lessons}
+            onLessonSelect={handleLessonSelect}
+            onLessonDelete={handleLessonDelete}
+          />
+        );
+      case 'settings':
+        return (
+          <Settings 
+            preferences={userPreferences}
+            onPreferencesChange={updatePreferences}
+          />
+        );
       default:
         return (
-          <div className="space-y-6">
-            {/* Stats Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <Card className="bg-gradient-to-br from-blue-500 to-purple-600 text-white">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-blue-100">Total Points</p>
-                      <p className="text-2xl font-bold">{userStats.points}</p>
-                    </div>
-                    <Trophy className="h-8 w-8 text-yellow-300" />
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card className="bg-gradient-to-br from-green-500 to-emerald-600 text-white">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-green-100">Current Streak</p>
-                      <p className="text-2xl font-bold">{userStats.streak} days</p>
-                    </div>
-                    <Target className="h-8 w-8 text-yellow-300" />
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-gray-600">Average WPM</p>
-                      <p className="text-2xl font-bold">{userStats.wpm}</p>
-                    </div>
-                    <TrendingUp className="h-8 w-8 text-blue-500" />
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-gray-600">Accuracy</p>
-                      <p className="text-2xl font-bold">{userStats.accuracy}%</p>
-                    </div>
-                    <BookOpen className="h-8 w-8 text-green-500" />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Current Lesson Progress */}
-            {lessonData && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Current Lesson</CardTitle>
-                  <CardDescription>{lessonData.title}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex justify-between text-sm text-gray-600">
-                      <span>Chunks: {lessonData.pages[0]?.chunks.length || 0}</span>
-                      <span>Questions: {lessonData.pages[0]?.questions.length || 0}</span>
-                    </div>
-                    <Button 
-                      onClick={() => setCurrentView('typing')} 
-                      className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-                    >
-                      Continue Lesson
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Badges */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Achievements</CardTitle>
-                <CardDescription>Your earned badges and milestones</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {badges.map((badge, index) => (
-                    <div key={index} className={`p-4 rounded-lg border-2 text-center ${
-                      badge.earned 
-                        ? 'border-yellow-400 bg-yellow-50' 
-                        : 'border-gray-200 bg-gray-50'
-                    }`}>
-                      <div className={`w-12 h-12 mx-auto mb-2 rounded-full flex items-center justify-center ${
-                        badge.earned ? 'bg-yellow-400' : 'bg-gray-300'
-                      }`}>
-                        <Trophy className={`h-6 w-6 ${badge.earned ? 'text-white' : 'text-gray-500'}`} />
-                      </div>
-                      <h3 className="font-semibold text-sm">{badge.name}</h3>
-                      <p className="text-xs text-gray-600">{badge.description}</p>
-                      {badge.earned && (
-                        <Badge className="mt-2 bg-green-500">Earned</Badge>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Quick Actions */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setCurrentView('upload')}>
-                <CardContent className="p-6 text-center">
-                  <Upload className="h-12 w-12 mx-auto mb-4 text-blue-500" />
-                  <h3 className="text-lg font-semibold mb-2">Upload New Lesson</h3>
-                  <p className="text-gray-600">Upload PDF, DOCX, or TXT files to create new typing exercises</p>
-                </CardContent>
-              </Card>
-              
-              <Card 
-                className={`cursor-pointer hover:shadow-lg transition-shadow ${!lessonData ? 'opacity-50 cursor-not-allowed' : ''}`}
-                onClick={() => lessonData && setCurrentView('typing')}
-              >
-                <CardContent className="p-6 text-center">
-                  <BookOpen className="h-12 w-12 mx-auto mb-4 text-green-500" />
-                  <h3 className="text-lg font-semibold mb-2">Practice Typing</h3>
-                  <p className="text-gray-600">
-                    {lessonData ? 'Continue with your current lesson' : 'Upload a file to start practicing'}
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
+          <Dashboard 
+            userStats={userStats}
+            badges={badges}
+          />
         );
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                <BookOpen className="h-5 w-5 text-white" />
+    <div className={`min-h-screen ${userPreferences.theme === 'dark' ? 'dark' : ''}`}>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 dark:from-gray-900 dark:to-gray-800">
+        {/* Header */}
+        <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center py-4">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                  <BookOpen className="h-5 w-5 text-white" />
+                </div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  Memty
+                </h1>
               </div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Memty
-              </h1>
+              
+              <div className="flex items-center space-x-4">
+                <nav className="flex space-x-2">
+                  <Button 
+                    variant={currentView === 'dashboard' ? 'default' : 'ghost'}
+                    onClick={() => setCurrentView('dashboard')}
+                  >
+                    Dashboard
+                  </Button>
+                  <Button 
+                    variant={currentView === 'lessons' ? 'default' : 'ghost'}
+                    onClick={() => setCurrentView('lessons')}
+                  >
+                    Lessons
+                  </Button>
+                  <Button 
+                    variant={currentView === 'upload' ? 'default' : 'ghost'}
+                    onClick={() => setCurrentView('upload')}
+                  >
+                    Upload
+                  </Button>
+                </nav>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={user.picture} alt={user.name} />
+                        <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-56" align="end" forceMount>
+                    <div className="flex items-center justify-start gap-2 p-2">
+                      <div className="flex flex-col space-y-1 leading-none">
+                        <p className="font-medium">{user.name}</p>
+                        <p className="text-xs text-muted-foreground">{user.email}</p>
+                      </div>
+                    </div>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setCurrentView('settings')}>
+                      <SettingsIcon className="mr-2 h-4 w-4" />
+                      Settings
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={signOut}>
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Sign out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
-            
-            <nav className="flex space-x-4">
-              <Button 
-                variant={currentView === 'dashboard' ? 'default' : 'ghost'}
-                onClick={() => setCurrentView('dashboard')}
-              >
-                Dashboard
-              </Button>
-              <Button 
-                variant={currentView === 'upload' ? 'default' : 'ghost'}
-                onClick={() => setCurrentView('upload')}
-              >
-                Upload
-              </Button>
-              {lessonData && (
-                <Button 
-                  variant="ghost"
-                  onClick={() => {
-                    resetLesson();
-                    setCurrentView('dashboard');
-                  }}
-                  className="text-red-600 hover:text-red-700"
-                >
-                  Reset Lesson
-                </Button>
-              )}
-            </nav>
           </div>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {renderCurrentView()}
+        {/* Main Content */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {renderCurrentView()}
+        </div>
+
+        {/* Achievement Notifications */}
+        {showNotification && (
+          <AchievementNotification
+            title={showNotification.title}
+            description={showNotification.description}
+            points={showNotification.points}
+            onClose={hideNotification}
+          />
+        )}
       </div>
     </div>
   );
