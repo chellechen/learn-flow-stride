@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Clock, Target, TrendingUp } from 'lucide-react';
+import { Clock, Target, TrendingUp, ChevronRight } from 'lucide-react';
 import { LessonData, TypingStats } from '@/types/lesson';
 
 interface TypingExerciseProps {
@@ -12,23 +12,27 @@ interface TypingExerciseProps {
 }
 
 const TypingExercise = ({ lessonData, onComplete }: TypingExerciseProps) => {
-  const [currentChunk, setCurrentChunk] = useState(lessonData.progress.currentChunk);
+  const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
   const [typedText, setTypedText] = useState('');
   const [startTime, setStartTime] = useState<number | null>(null);
   const [wpm, setWpm] = useState(0);
   const [accuracy, setAccuracy] = useState(100);
   const [isCompleted, setIsCompleted] = useState(false);
   const [totalTimeSpent, setTotalTimeSpent] = useState(0);
+  const [correctChars, setCorrectChars] = useState(0);
+  const [totalChars, setTotalChars] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const chunks = lessonData.chunks;
-  const currentText = chunks[currentChunk]?.text || '';
+  const currentPage = lessonData.pages[lessonData.currentPage];
+  const currentChunk = currentPage?.chunks[currentChunkIndex];
+  const currentText = currentChunk?.text || '';
+  const totalChunks = currentPage?.chunks.length || 0;
 
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.focus();
     }
-  }, [currentChunk]);
+  }, [currentChunkIndex]);
 
   useEffect(() => {
     if (typedText.length > 0 && !startTime) {
@@ -42,14 +46,16 @@ const TypingExercise = ({ lessonData, onComplete }: TypingExerciseProps) => {
       setWpm(calculatedWpm);
 
       // Calculate accuracy
-      let correctChars = 0;
+      let correct = 0;
       for (let i = 0; i < Math.min(typedText.length, currentText.length); i++) {
         if (typedText[i] === currentText[i]) {
-          correctChars++;
+          correct++;
         }
       }
-      const calculatedAccuracy = typedText.length > 0 ? Math.round((correctChars / typedText.length) * 100) : 100;
+      const calculatedAccuracy = typedText.length > 0 ? Math.round((correct / typedText.length) * 100) : 100;
       setAccuracy(calculatedAccuracy);
+      setCorrectChars(correct);
+      setTotalChars(typedText.length);
     }
   }, [typedText, startTime, currentText]);
 
@@ -68,8 +74,8 @@ const TypingExercise = ({ lessonData, onComplete }: TypingExerciseProps) => {
       setTotalTimeSpent(prev => prev + chunkTimeSpent);
       
       setTimeout(() => {
-        if (currentChunk < chunks.length - 1) {
-          setCurrentChunk(prev => prev + 1);
+        if (currentChunkIndex < totalChunks - 1) {
+          setCurrentChunkIndex(prev => prev + 1);
           setTypedText('');
           setStartTime(null);
         } else {
@@ -79,87 +85,111 @@ const TypingExercise = ({ lessonData, onComplete }: TypingExerciseProps) => {
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Auto-advance on Enter when chunk is complete
+    if (e.key === 'Enter' && typedText === currentText) {
+      e.preventDefault();
+      if (currentChunkIndex < totalChunks - 1) {
+        setCurrentChunkIndex(prev => prev + 1);
+        setTypedText('');
+        setStartTime(null);
+      } else {
+        setIsCompleted(true);
+      }
+    }
+  };
+
   const getCharacterStatus = (index: number) => {
     if (index >= typedText.length) return 'pending';
     return typedText[index] === currentText[index] ? 'correct' : 'incorrect';
   };
 
-  const progress = ((currentChunk + (typedText.length / currentText.length)) / chunks.length) * 100;
+  const progress = ((currentChunkIndex + (typedText.length / currentText.length)) / totalChunks) * 100;
 
   const handleComplete = () => {
     const finalStats: TypingStats = {
       wpm,
       accuracy,
-      timeSpent: totalTimeSpent
+      timeSpent: totalTimeSpent,
+      correctChars,
+      totalChars
     };
     onComplete(finalStats);
   };
 
   if (isCompleted) {
     return (
-      <Card className="max-w-2xl mx-auto">
-        <CardHeader className="text-center">
-          <CardTitle className="text-green-600">Typing Exercise Completed!</CardTitle>
-          <CardDescription>Great job! Let's move on to the recall phase.</CardDescription>
+      <Card className="max-w-3xl mx-auto shadow-lg">
+        <CardHeader className="text-center bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-t-lg">
+          <CardTitle className="text-2xl">Typing Phase Complete! 🎉</CardTitle>
+          <CardDescription className="text-green-100">
+            Excellent work! Let's move on to test your recall.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div className="p-4 bg-blue-50 rounded-lg">
-              <TrendingUp className="h-8 w-8 mx-auto mb-2 text-blue-600" />
-              <p className="text-2xl font-bold text-blue-600">{wpm}</p>
-              <p className="text-sm text-gray-600">WPM</p>
+        <CardContent className="space-y-6 p-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="text-center p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl">
+              <TrendingUp className="h-12 w-12 mx-auto mb-3 text-blue-600" />
+              <p className="text-3xl font-bold text-blue-600">{wpm}</p>
+              <p className="text-gray-600 font-medium">Words per minute</p>
             </div>
-            <div className="p-4 bg-green-50 rounded-lg">
-              <Target className="h-8 w-8 mx-auto mb-2 text-green-600" />
-              <p className="text-2xl font-bold text-green-600">{accuracy}%</p>
-              <p className="text-sm text-gray-600">Accuracy</p>
+            <div className="text-center p-6 bg-gradient-to-br from-green-50 to-green-100 rounded-xl">
+              <Target className="h-12 w-12 mx-auto mb-3 text-green-600" />
+              <p className="text-3xl font-bold text-green-600">{accuracy}%</p>
+              <p className="text-gray-600 font-medium">Accuracy</p>
             </div>
-            <div className="p-4 bg-purple-50 rounded-lg">
-              <Clock className="h-8 w-8 mx-auto mb-2 text-purple-600" />
-              <p className="text-2xl font-bold text-purple-600">{Math.round(totalTimeSpent)}s</p>
-              <p className="text-sm text-gray-600">Time</p>
+            <div className="text-center p-6 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl">
+              <Clock className="h-12 w-12 mx-auto mb-3 text-purple-600" />
+              <p className="text-3xl font-bold text-purple-600">{Math.round(totalTimeSpent)}s</p>
+              <p className="text-gray-600 font-medium">Time spent</p>
             </div>
           </div>
           
-          <Button 
-            onClick={handleComplete}
-            className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
-          >
-            Continue to Recall Phase
-          </Button>
+          <div className="text-center">
+            <p className="text-gray-600 mb-4">
+              You typed {totalChars} characters with {correctChars} correct
+            </p>
+            <Button 
+              onClick={handleComplete}
+              className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold px-8 py-3 rounded-lg transition-all duration-200 transform hover:scale-105"
+            >
+              Continue to Recall Phase
+              <ChevronRight className="ml-2 h-5 w-5" />
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card className="max-w-4xl mx-auto">
+    <Card className="max-w-5xl mx-auto shadow-lg">
       <CardHeader>
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-start">
           <div>
-            <CardTitle>Typing Exercise - {lessonData.title}</CardTitle>
-            <CardDescription>
-              Chunk {currentChunk + 1} of {chunks.length} - Type the text below
+            <CardTitle className="text-xl text-gray-800">{lessonData.title}</CardTitle>
+            <CardDescription className="text-gray-600">
+              Page {currentPage?.pageNumber} • Chunk {currentChunkIndex + 1} of {totalChunks} • {currentChunk?.wordCount} words
             </CardDescription>
           </div>
-          <div className="flex space-x-4 text-sm">
+          <div className="flex space-x-6 text-sm">
             <div className="text-center">
-              <p className="font-semibold text-blue-600">{wpm}</p>
+              <p className="text-2xl font-bold text-blue-600">{wpm}</p>
               <p className="text-gray-600">WPM</p>
             </div>
             <div className="text-center">
-              <p className="font-semibold text-green-600">{accuracy}%</p>
+              <p className="text-2xl font-bold text-green-600">{accuracy}%</p>
               <p className="text-gray-600">Accuracy</p>
             </div>
           </div>
         </div>
-        <Progress value={progress} className="w-full" />
+        <Progress value={progress} className="w-full h-2" />
       </CardHeader>
       
       <CardContent className="space-y-6">
         {/* Reference Text */}
-        <div className="p-4 bg-gray-50 rounded-lg">
-          <h3 className="font-semibold mb-2">Reference Text:</h3>
+        <div className="p-6 bg-gray-50 rounded-xl">
+          <h3 className="font-semibold mb-4 text-gray-700">Type this text:</h3>
           <div className="text-lg leading-relaxed font-mono">
             {currentText.split('').map((char, index) => (
               <span
@@ -180,18 +210,22 @@ const TypingExercise = ({ lessonData, onComplete }: TypingExerciseProps) => {
 
         {/* Typing Area */}
         <div>
-          <h3 className="font-semibold mb-2">Type here:</h3>
+          <h3 className="font-semibold mb-3 text-gray-700">Your typing:</h3>
           <textarea
             ref={textareaRef}
             value={typedText}
             onChange={handleTextChange}
-            className="w-full h-32 p-4 border rounded-lg text-lg font-mono resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            onKeyDown={handleKeyDown}
+            className="w-full h-32 p-4 border-2 border-gray-200 rounded-xl text-lg font-mono resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
             placeholder="Start typing the text above..."
           />
+          <p className="text-sm text-gray-500 mt-2">
+            Press Enter to advance when you complete a chunk
+          </p>
         </div>
 
         {/* Progress Indicator */}
-        <div className="flex justify-between text-sm text-gray-600">
+        <div className="flex justify-between items-center text-sm text-gray-600 bg-white p-4 rounded-lg border">
           <span>{typedText.length} / {currentText.length} characters</span>
           <span>{Math.round((typedText.length / currentText.length) * 100)}% complete</span>
         </div>
